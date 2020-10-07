@@ -1,0 +1,167 @@
+# R script to visualise a phylogenetic tree created by PHYLIP
+(created 03/2019)  
+Visualisation of a phylogenetic tree and corresponding heatmap of traits.
+
+## Setup (Windows)
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library("ape", lib.loc="\\\\emr-dstore1/mirabl$/R/win-library/3.5")
+library("dplyr", lib.loc="\\\\emr-dstore1/mirabl$/R/win-library/3.5")
+library("RColorBrewer", lib.loc="\\\\emr-dstore1/mirabl$/R/win-library/3.5")
+#library("phytools", lib.loc="\\\\emr-dstore1/mirabl$/R/win-library/3.5")
+library("tidyverse", lib.loc="\\\\emr-dstore1/mirabl$/R/win-library/3.5")
+library("ggtree", lib.loc="\\\\emr-dstore1/mirabl$/R/win-library/3.5")
+library("gplots", lib.loc="\\\\emr-dstore1/mirabl$/R/win-library/3.5")
+library("ggplot2", lib.loc="\\\\emr-dstore1/mirabl$/R/win-library/3.5")
+#library("phangorn", lib.loc="\\\\emr-dstore1/mirabl$/R/win-library/3.5")
+library("cowplot", lib.loc="\\\\emr-dstore1/mirabl$/R/win-library/3.5")
+
+setwd("C:/Users/mirabl/Dropbox/Xf_docs/Y1/Phylogenies/MLST_phylo")
+
+mlst_tree <- read.tree("C:/Users/mirabl/Dropbox/Xf_docs/Y1/Phylogenies/MLST_phylo/phylip_mlst_bootstr.nwk")
+
+mlst_feat <- read.csv("C:/Users/mirabl/Dropbox/Xf_docs/Y1/Phylogenies/MLST_phylo/pubmlst_feat.csv", na.strings = c("NA"))
+
+mlst_out <- file("C:/Users/mirabl/Dropbox/Xf_docs/Y1/Phylogenies/MLST_phylo/phylip_mlst_bootstr.out")
+
+mlst_feat <- data.frame(mlst_feat) %>%
+  unite(ID, c(ï..id, isolate), sep="_") %>% # concatenate columns 1 and 2 and rename column to 'ID'
+  unite(ID, c(ID, ATCC_no), sep="")
+  
+mlst_feat$ID <- substr(mlst_feat$ID, 0, 10)
+
+mlst_feat <- mlst_feat[match(mlst_tree$tip.label, mlst_feat$ID),]
+
+rownames(mlst_feat) <- mlst_feat$ID
+dd <- data.frame(label=mlst_tree$tip.label, mlst_feat$ID)
+
+nodename <- mlst_tree$edge
+
+phyfile <- sysem.file("mlst_out", "mlst_tree", package="treeio")
+
+phyliptre <- read.phylip.tree("C:/Users/mirabl/Dropbox/Xf_docs/Y1/Phylogenies/MLST_phylo/phylip_mlst_bootstr.out")
+
+#abc <- ggtree(mlst_tree)
+#xyz <- abc$data
+#xyz <- xyz[!xyz$isTip,]
+#xyz$label <- as.numeric(xyz$label)
+#xyz <- xyz[xyz$label > 80,]
+```
+
+
+## Setup (iOS)
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = FALSE)
+library("ape", lib.loc="/Library/Frameworks/R.framework/Versions/3.3/Resources/library")
+library("dplyr", lib.loc="/Library/Frameworks/R.framework/Versions/3.3/Resources/library")
+library("RColorBrewer", lib.loc="/Library/Frameworks/R.framework/Versions/3.3/Resources/library")
+
+setwd("~/Dropbox/Xf_docs/Y1/Phylogenies/MLST_phylo")
+
+mlst_tree <- read.tree("~/Dropbox/Xf_docs/Y1/Phylogenies/MLST_phylo/no_xanth.tre")
+
+mlst_feat <- read.csv("~/Dropbox/Xf_docs/Y1/Phylogenies/MLST_phylo/pubmlst_feat.csv", na.strings = "NA")
+```
+
+## Setup of colours to be used in heatmap
+```{r}
+cls_country <- function(mlst_feat){
+  ss_country <- sort(unique(mlst_feat$country))
+  colors_country <- setNames(c("#238B45", "#6A51A3", "#CB181D", "#4292C6", "#2171B5")[1:length(ss_country)],ss_country)
+# Brazil, Costa Rica, Italy, Mexico, USA
+
+  colors_country <- colors_country[mlst_feat$country]
+  return(colors_country)
+}
+colors_country <- cls_country(mlst_feat)
+
+cls_family <- function(mlst_feat){
+  ss_family <- sort(unique(mlst_feat$host_family))
+  colors_family <- setNames(c("#000075", "#FFFF99", "#ffe119", "#CA3767", "#45CEA2", "#DBD7D2", "#C5E384", "#A2ADD0", "#414A4C", "#469990", "#911eb4", "#f58231", "#979AAA", "#E7C697", "#1DF914", "#C5D0E6", "#ffd8b1", "#FDBCB4", "#808000", "#D68A59", "#fabebe", "#a9a9a9", "#bfef45", "#76FF7A", "#CDC5C2", "#aaffc3")[1:length(ss_family)],ss_family)
+#Adoxaceae-navy, Altingiaceae-Canary,  Apocynaceae-yellow, Asteraceae-Jazzberry Jam, Berberidaceae-Shamrock, Betulaceae-Timberwolf, Bignoniaceae-Yellow Green, Cannabaceae-Wild Blue Yonder, Cicadellidae-Outer Space, Ericaceae-teal, Fabaceae-purple, Fagaceae-orange, Hemerocallidaceae-Manatee, Juglandaceae-Gold, Lamiaceae-Electric Lime, Magnoliaceae-Periwinkle, Moraceae-apricot, Myrtaceae-Melon, Oleaceae-olive, Platanaceae-Raw Sienna, Rosaceae-pink, Rubiaceae-grey, Rutaceae-lime, Sapindaceae-Screamin Green, Ulmaceae-Silver, Vitaceae-mint
+
+  colors_family <- colors_family[mlst_feat$host_family]
+  return(colors_family)
+}
+colors_family <- cls_family(mlst_feat)
+```
+
+
+## Script to create a phylogenetic tree (ggtree)
+```{r}
+png(file="xf_mlst-phylogeny_v1.png", width=1000, height=1000)   # creates a .png file
+plot.phylo(tree, label.offset=0.001, use.edge.length=TRUE, align.tip.label=FALSE, edge.color="gray40", tip.color="black", cex=1, show.tip.label=TRUE, no.margin=TRUE)  
+
+phylo.heatmap(tree, mlst_feat$ST..MLST.)
+
+dev.off()   # ends and saves .png file
+```
+
+## Script to create a phylogenetic tree (ggtree) with heatmap of traits
+```{r}
+png(file="C:/Users/mirabl/Dropbox/Xf_docs/Y1/Phylogenies/MLST_phylo/Diagrams/xf_mlst_phylogeny-heatmap_v2.png", width=2500, height=2500)   # creates a .png file
+
+p <- ggtree(mlst_tree, layout="circular", branch.length = "branch.length", size=1, ladderize = TRUE)
+#p1 <- p + geom_tiplab2(size=1, aes(angle=angle), align=T, linesize=0.5, linetype="dotted")
+
+
+p1 <- p %<+% dd + geom_tiplab2(aes(label=paste('',mlst_feat.ID,'')), offset = 250, size=5, linesize=0.05, linetype="dotted", align=T)
+
+
+#col <- c(brewer.pal(5, "Set2"), brewer.pal(12, "Paired"))
+
+p2 <- gheatmap(p1, mlst_feat[, "country", drop=F], offset=50, width=0.05, colnames = F)
+p3 <- gheatmap(p2, mlst_feat[, "host_family", drop=F], offset=125, width=0.05, colnames = F)
+
+pp <- p3   +   scale_fill_manual(values=c(colors_country, colors_family))
+
+p2x <- p2  +   scale_fill_manual(values=c(colors_country, colors_family))
+p3x <- gheatmap(p, mlst_feat[, "host_family", drop=F], offset=125, width=0.05, colnames = F)  +   scale_fill_manual(values=c(colors_country, colors_family))
+
+#p4 <- gheatmap(p3, mlst_feat[, "ST..MLST.", drop=F],  offset=0.004, width=0.05, colnames = F, low = "gray100", high = "black") 
+
+leg2 <- get_legend(p2x)
+leg3 <- get_legend(p3x)
+
+pp <- pp + theme(legend.position = "none")
+
+plot_grid(pp, leg2, leg3, ncol = 3, rel_widths = c(0.2, 0.02, 0.02))
+
+
+dev.off()
+```
+
+## Script to create a phylogenetic tree (ggtree) with heatmap of traits and bootstrap values on nodes
+```{r}
+png(file="C:/Users/mirabl/Dropbox/Xf_docs/Y1/Phylogenies/MLST_phylo/Diagrams/xf_mlst_phylogeny-heatmap_v3.png", width=2500, height=2500)   # creates a .png file
+
+p <- ggtree(mlst_tree, layout="circular", branch.length = "branch.length", size=0.5, ladderize = TRUE)   +    geom_text2(aes(size=10, col="red", label=label, subset = !is.na(as.numeric(label)) & as.numeric(label) > 80))
+#p1 <- p + geom_tiplab2(size=1, aes(angle=angle), align=T, linesize=0.5, linetype="dotted")
+
+
+p1 <- p %<+% dd + geom_tiplab2(aes(label=paste('',mlst_feat.ID,'')), offset = 250, size=5, linesize=0.05, linetype="dotted", align=T)
+
+
+#col <- c(brewer.pal(5, "Set2"), brewer.pal(12, "Paired"))
+
+p2 <- gheatmap(p1, mlst_feat[, "country", drop=F], offset=50, width=0.05, colnames = F)
+p3 <- gheatmap(p2, mlst_feat[, "host_family", drop=F], offset=125, width=0.05, colnames = F)
+
+pp <- p3   +   scale_fill_manual(values=c(colors_country, colors_family))
+
+p2x <- p2  +   scale_fill_manual(values=c(colors_country, colors_family))
+p3x <- gheatmap(p, mlst_feat[, "host_family", drop=F], offset=125, width=0.05, colnames = F)  +   scale_fill_manual(values=c(colors_country, colors_family))
+
+#p4 <- gheatmap(p3, mlst_feat[, "ST..MLST.", drop=F],  offset=0.004, width=0.05, colnames = F, low = "gray100", high = "black") 
+
+leg2 <- get_legend(p2x)
+leg3 <- get_legend(p3x)
+
+pp <- pp + theme(legend.position = "none")
+
+plot_grid(pp, leg2, leg3, ncol = 3, rel_widths = c(0.2, 0.02, 0.02))
+
+
+dev.off()
+```
